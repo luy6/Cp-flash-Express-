@@ -1015,10 +1015,11 @@ document.getElementById('inpSenhaAdmin').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') tentarLoginAdmin();
 });
 
-/* ================= MODO FOTO (foto da galeria salva direto, sem link) ================= */
-// Escolhe a foto direto da galeria do celular/computador e converte para uma imagem
-// "embutida" (base64), sem precisar de link nem de conta em nenhum site externo.
-const FOTO_MAX_LADO = 900; // redimensiona fotos grandes para não pesar demais o cardápio
+/* ================= MODO FOTO (direto da galeria, sem link e sem internet) ================= */
+// A foto escolhida é reduzida e guardada dentro do próprio cardápio (nada de link externo).
+// Isso é ótimo pra praticidade, mas cada foto salva ocupa espaço no "banco" (Firestore tem um
+// limite de ~1MB por cardápio inteiro). Por isso a foto é comprimida automaticamente aqui embaixo.
+// Se um dia isso virar problema (muitas fotos, aviso de espaço cheio), me chama que eu ajusto.
 
 function escolherFoto(callback){
   const input = document.getElementById('fileInputFoto');
@@ -1026,32 +1027,31 @@ function escolherFoto(callback){
   input.onchange = () => {
     const file = input.files && input.files[0];
     if(!file) return;
-    processarFotoLocal(file, callback);
+    comprimirFotoParaBase64(file, callback);
   };
   input.click();
 }
 
-function processarFotoLocal(file, callback){
-  const leitor = new FileReader();
-  leitor.onload = (ev) => {
+function comprimirFotoParaBase64(file, callback){
+  const MAX_LADO = 560;   // tamanho máximo (em pixels) do lado maior da foto
+  const QUALIDADE = 0.72; // 0 a 1 — quanto menor, mais leve (e menos nítida) fica a foto
+  const reader = new FileReader();
+  reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
-      let largura = img.width, altura = img.height;
-      if(largura > FOTO_MAX_LADO || altura > FOTO_MAX_LADO){
-        if(largura >= altura){ altura = Math.round(altura * FOTO_MAX_LADO / largura); largura = FOTO_MAX_LADO; }
-        else { largura = Math.round(largura * FOTO_MAX_LADO / altura); altura = FOTO_MAX_LADO; }
-      }
+      let w = img.width, h = img.height;
+      if(w >= h && w > MAX_LADO){ h = Math.round(h * MAX_LADO / w); w = MAX_LADO; }
+      else if(h > w && h > MAX_LADO){ w = Math.round(w * MAX_LADO / h); h = MAX_LADO; }
       const canvas = document.createElement('canvas');
-      canvas.width = largura; canvas.height = altura;
-      canvas.getContext('2d').drawImage(img, 0, 0, largura, altura);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-      callback(dataUrl);
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', QUALIDADE));
     };
-    img.onerror = () => alert('Não foi possível ler essa foto. Tente outra imagem.');
-    img.src = ev.target.result;
+    img.onerror = () => alert('Não foi possível abrir essa imagem. Tente outra foto.');
+    img.src = e.target.result;
   };
-  leitor.onerror = () => alert('Não foi possível ler essa foto. Tente outra imagem.');
-  leitor.readAsDataURL(file);
+  reader.onerror = () => alert('Não foi possível ler o arquivo escolhido.');
+  reader.readAsDataURL(file);
 }
 
 /* ================= PERSISTÊNCIA (localStorage + Firebase) ================= */
@@ -1105,14 +1105,20 @@ if(firebaseConfigurado){
 
 function salvarDados(){
   const dados = { categories: CATEGORIES, zones: DELIVERY_ZONES };
+  const jsonStr = JSON.stringify(dados);
   // sempre guarda uma cópia local (funciona mesmo sem internet)
   try{
-    localStorage.setItem(CHAVE_STORAGE, JSON.stringify(dados));
+    localStorage.setItem(CHAVE_STORAGE, jsonStr);
   }catch(e){
     console.warn('Não foi possível salvar no navegador:', e);
   }
   // e sincroniza na nuvem, se o Firebase estiver configurado
   if(firebaseConfigurado && docCardapio){
+    const tamanhoMB = (jsonStr.length / (1024*1024)).toFixed(2);
+    if(jsonStr.length > 950000){
+      alert(`O cardápio está ficando grande (${tamanhoMB}MB) e passou do limite de sincronização na nuvem (1MB).\n\nEsta última alteração foi salva só neste navegador. Para liberar espaço, remova ou troque alguma foto por uma versão mais leve.`);
+      return;
+    }
     docCardapio.set(dados).catch((e) => {
       console.warn('Não foi possível sincronizar com a nuvem:', e);
     });
