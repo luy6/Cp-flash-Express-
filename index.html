@@ -1015,41 +1015,43 @@ document.getElementById('inpSenhaAdmin').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') tentarLoginAdmin();
 });
 
-/* ================= MODO FOTO (upload de imagem via ImgBB) ================= */
-// Para ativar o upload direto da galeria: crie uma conta grátis em https://imgbb.com/,
-// pegue sua chave em https://api.imgbb.com/ e cole abaixo no lugar de "COLE_AQUI_SUA_CHAVE_IMGBB".
-// Sem a chave configurada, o modo foto ainda funciona colando o link direto de uma imagem.
-const IMGBB_API_KEY = "COLE_AQUI_SUA_CHAVE_IMGBB";
+/* ================= MODO FOTO (foto da galeria salva direto, sem link) ================= */
+// Escolhe a foto direto da galeria do celular/computador e converte para uma imagem
+// "embutida" (base64), sem precisar de link nem de conta em nenhum site externo.
+const FOTO_MAX_LADO = 900; // redimensiona fotos grandes para não pesar demais o cardápio
 
 function escolherFoto(callback){
-  if(IMGBB_API_KEY === "COLE_AQUI_SUA_CHAVE_IMGBB"){
-    const url = prompt('Upload automático não configurado ainda.\nCole aqui o link de uma imagem (ou configure o ImgBB no código para enviar direto da galeria):');
-    if(url && url.trim()) callback(url.trim());
-    return;
-  }
   const input = document.getElementById('fileInputFoto');
   input.value = '';
   input.onchange = () => {
     const file = input.files && input.files[0];
     if(!file) return;
-    enviarFotoImgBB(file, callback);
+    processarFotoLocal(file, callback);
   };
   input.click();
 }
 
-function enviarFotoImgBB(file, callback){
-  const fd = new FormData();
-  fd.append('image', file);
-  fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_API_KEY, { method:'POST', body:fd })
-    .then(r => r.json())
-    .then(res => {
-      if(res && res.success && res.data && res.data.url){
-        callback(res.data.url);
-      } else {
-        alert('Não foi possível enviar a foto. Tente novamente.');
+function processarFotoLocal(file, callback){
+  const leitor = new FileReader();
+  leitor.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      let largura = img.width, altura = img.height;
+      if(largura > FOTO_MAX_LADO || altura > FOTO_MAX_LADO){
+        if(largura >= altura){ altura = Math.round(altura * FOTO_MAX_LADO / largura); largura = FOTO_MAX_LADO; }
+        else { largura = Math.round(largura * FOTO_MAX_LADO / altura); altura = FOTO_MAX_LADO; }
       }
-    })
-    .catch(() => alert('Falha ao enviar a foto. Verifique a internet e tente de novo.'));
+      const canvas = document.createElement('canvas');
+      canvas.width = largura; canvas.height = altura;
+      canvas.getContext('2d').drawImage(img, 0, 0, largura, altura);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      callback(dataUrl);
+    };
+    img.onerror = () => alert('Não foi possível ler essa foto. Tente outra imagem.');
+    img.src = ev.target.result;
+  };
+  leitor.onerror = () => alert('Não foi possível ler essa foto. Tente outra imagem.');
+  leitor.readAsDataURL(file);
 }
 
 /* ================= PERSISTÊNCIA (localStorage + Firebase) ================= */
