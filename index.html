@@ -191,6 +191,47 @@
   .stat b{ font-family:'Anton'; font-size:28px; display:block; color:var(--white); }
   .stat span{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
 
+  /* ---------- banner carousel (anúncios do admin) ---------- */
+  .banner-carousel{
+    position:relative; max-width:1180px; margin:18px auto 0; padding:0 5vw;
+  }
+  .banner-carousel.vazio{ display:none; }
+  .banner-track{
+    position:relative; width:100%; border-radius:16px; overflow:hidden;
+    aspect-ratio:16/5; background:var(--panel); border:1px solid var(--line);
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  @media (max-width:640px){ .banner-track{ aspect-ratio:16/9; } }
+  .banner-slide{
+    position:absolute; inset:0; opacity:0; transition:opacity .6s ease;
+    pointer-events:none;
+  }
+  .banner-slide.ativo{ opacity:1; pointer-events:auto; }
+  .banner-slide img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .banner-dots{
+    position:absolute; left:0; right:0; bottom:10px; display:flex; gap:7px; justify-content:center;
+  }
+  .banner-dot{
+    width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.4);
+    border:none; cursor:pointer; padding:0; transition:.2s;
+  }
+  .banner-dot.ativo{ background:var(--red); width:22px; border-radius:5px; }
+  .banner-remover{
+    position:absolute; top:10px; right:10px; z-index:5;
+    width:30px; height:30px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(18,8,33,.75); color:#fff; font-size:15px; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .banner-remover:hover{ background:var(--red); }
+  .banner-add-btn{
+    margin:14px auto 0; display:flex; align-items:center; justify-content:center; gap:8px;
+    max-width:1180px; width:100%; padding:14px; border-radius:14px;
+    background:var(--panel); border:2px dashed var(--line); color:var(--muted);
+    font-weight:700; cursor:pointer; text-transform:uppercase; font-size:13px; letter-spacing:.03em;
+  }
+  .banner-add-btn:hover{ border-color:var(--red); color:var(--white); }
+  .banner-admin-wrap{ max-width:1180px; margin:0 auto; padding:0 5vw; }
+
   /* ---------- bolt divider (signature) ---------- */
   .bolt-divider{
     position:relative; height:70px; display:flex; align-items:center; justify-content:center;
@@ -609,6 +650,14 @@
   </button>
 </header>
 
+<!-- ANÚNCIOS (carrossel gerenciado pelo admin) -->
+<div id="bannerCarousel" class="banner-carousel vazio">
+  <div class="banner-track" id="bannerTrack"></div>
+</div>
+<div class="banner-admin-wrap">
+  <button type="button" class="banner-add-btn" id="btnAddBanner" style="display:none;">+ Adicionar anúncio (foto)</button>
+</div>
+
 <!-- HERO -->
 <section class="hero">
   <div class="hero-logo">
@@ -811,6 +860,8 @@ let CATEGORIES = [
 const cart = {}; // id -> {product, qty}
 
 /* ---------------- delivery zones / fee (editável pelo modo administrador) ---------------- */
+let BANNERS = []; // anúncios/promoções cadastrados pelo admin (array de fotos em base64)
+
 let DELIVERY_ZONES = [
   {id:'centro', name:'Centro', fee:5.0},
   {id:'zona-sul', name:'Zona Sul', fee:7.9},
@@ -1093,6 +1144,7 @@ if(firebaseConfigurado){
       const dados = snap.data();
       if(Array.isArray(dados.categories) && dados.categories.length) CATEGORIES = dados.categories;
       if(Array.isArray(dados.zones) && dados.zones.length) DELIVERY_ZONES = dados.zones;
+      if(Array.isArray(dados.banners)) BANNERS = dados.banners;
       carregouDaNuvemUmaVez = true;
       populateZones();
       renderAll();
@@ -1105,7 +1157,7 @@ if(firebaseConfigurado){
 }
 
 function salvarDados(){
-  const dados = { categories: CATEGORIES, zones: DELIVERY_ZONES };
+  const dados = { categories: CATEGORIES, zones: DELIVERY_ZONES, banners: BANNERS };
   const jsonStr = JSON.stringify(dados);
   // sempre guarda uma cópia local (funciona mesmo sem internet)
   try{
@@ -1132,10 +1184,119 @@ function carregarDados(){
     const dados = JSON.parse(salvo);
     if(Array.isArray(dados.categories) && dados.categories.length) CATEGORIES = dados.categories;
     if(Array.isArray(dados.zones) && dados.zones.length) DELIVERY_ZONES = dados.zones;
+    if(Array.isArray(dados.banners)) BANNERS = dados.banners;
   }catch(e){
     console.warn('Não foi possível carregar os dados salvos:', e);
   }
 }
+
+/* ================= CARROSSEL DE ANÚNCIOS (banners do admin) ================= */
+let bannerSlideAtual = 0;
+let bannerTimer = null;
+
+function idUnicoBanner(){
+  return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+function adicionarBanner(){
+  escolherFoto((url) => {
+    BANNERS.push({ id: idUnicoBanner(), image: url });
+    bannerSlideAtual = BANNERS.length - 1;
+    salvarDados();
+    renderBanners();
+  });
+}
+
+function removerBanner(id){
+  if(!confirm('Remover este anúncio do carrossel?')) return;
+  const i = BANNERS.findIndex(b => b.id === id);
+  BANNERS = BANNERS.filter(b => b.id !== id);
+  if(bannerSlideAtual >= BANNERS.length) bannerSlideAtual = Math.max(0, BANNERS.length - 1);
+  salvarDados();
+  renderBanners();
+}
+
+function irParaSlideBanner(i){
+  bannerSlideAtual = i;
+  atualizarSlidesBanner();
+  reiniciarAutoplayBanner();
+}
+
+function atualizarSlidesBanner(){
+  const track = document.getElementById('bannerTrack');
+  if(!track) return;
+  track.querySelectorAll('.banner-slide').forEach((el, i) => {
+    el.classList.toggle('ativo', i === bannerSlideAtual);
+  });
+  track.querySelectorAll('.banner-dot').forEach((el, i) => {
+    el.classList.toggle('ativo', i === bannerSlideAtual);
+  });
+}
+
+function reiniciarAutoplayBanner(){
+  if(bannerTimer) clearInterval(bannerTimer);
+  if(BANNERS.length < 2) return;
+  bannerTimer = setInterval(() => {
+    bannerSlideAtual = (bannerSlideAtual + 1) % BANNERS.length;
+    atualizarSlidesBanner();
+  }, 4500);
+}
+
+function renderBanners(){
+  const wrap = document.getElementById('bannerCarousel');
+  const track = document.getElementById('bannerTrack');
+  const addBtn = document.getElementById('btnAddBanner');
+  if(!wrap || !track) return;
+
+  if(bannerSlideAtual >= BANNERS.length) bannerSlideAtual = 0;
+
+  wrap.classList.toggle('vazio', BANNERS.length === 0 && !modoAdmin);
+  if(addBtn) addBtn.style.display = modoAdmin ? 'flex' : 'none';
+
+  track.innerHTML = '';
+  if(BANNERS.length === 0){
+    if(modoAdmin){
+      const vazio = document.createElement('div');
+      vazio.className = 'banner-slide ativo';
+      vazio.innerHTML = '<div class="empty-state" style="height:100%;display:flex;align-items:center;justify-content:center;">Nenhum anúncio cadastrado ainda. Use o botão abaixo para adicionar fotos ⚡</div>';
+      track.appendChild(vazio);
+    }
+    return;
+  }
+
+  BANNERS.forEach((b, i) => {
+    const slide = document.createElement('div');
+    slide.className = 'banner-slide' + (i === bannerSlideAtual ? ' ativo' : '');
+    slide.innerHTML = `<img src="${b.image}" alt="Anúncio">`;
+    if(modoAdmin){
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'banner-remover';
+      del.title = 'Remover este anúncio';
+      del.textContent = '✕';
+      del.onclick = (ev) => { ev.stopPropagation(); removerBanner(b.id); };
+      slide.appendChild(del);
+    }
+    track.appendChild(slide);
+  });
+
+  if(BANNERS.length > 1){
+    const dots = document.createElement('div');
+    dots.className = 'banner-dots';
+    BANNERS.forEach((b, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'banner-dot' + (i === bannerSlideAtual ? ' ativo' : '');
+      dot.onclick = () => irParaSlideBanner(i);
+      dots.appendChild(dot);
+    });
+    track.appendChild(dots);
+  }
+
+  reiniciarAutoplayBanner();
+}
+
+document.getElementById('btnAddBanner').addEventListener('click', adicionarBanner);
 
 /* ================= MODO DE ALTERAÇÃO: ITENS ================= */
 function slugify(str){
@@ -1351,6 +1512,7 @@ document.getElementById('btnNovaZona').addEventListener('click', () => {
 
 /* ================= RENDERIZAÇÃO DO CARDÁPIO (nav + seções + cards) ================= */
 function renderAll(){
+  renderBanners();
   const nav = document.getElementById('navLinks');
   const container = document.getElementById('menuSections');
   nav.innerHTML = '';
