@@ -193,15 +193,15 @@
 
   /* ---------- banner carousel (anúncios do admin) ---------- */
   .banner-carousel{
-    position:relative; max-width:1180px; margin:18px auto 0; padding:0 5vw;
+    position:relative; max-width:1320px; margin:18px auto 0; padding:0 4vw;
   }
   .banner-carousel.vazio{ display:none; }
   .banner-track{
     position:relative; width:100%; border-radius:16px; overflow:hidden;
-    aspect-ratio:16/5; background:var(--panel); border:1px solid var(--line);
+    aspect-ratio:16/7; background:var(--panel); border:1px solid var(--line);
     box-shadow:0 10px 30px rgba(0,0,0,.35);
   }
-  @media (max-width:640px){ .banner-track{ aspect-ratio:16/9; } }
+  @media (max-width:640px){ .banner-track{ aspect-ratio:4/3; } }
   .banner-slide{
     position:absolute; inset:0; opacity:0; transition:opacity .6s ease;
     pointer-events:none;
