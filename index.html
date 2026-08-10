@@ -209,21 +209,46 @@
   .banner-slide.ativo{ opacity:1; pointer-events:auto; }
   .banner-slide img{ width:100%; height:100%; object-fit:cover; display:block; cursor:pointer; }
   .banner-lightbox{
-    position:fixed; inset:0; background:rgba(6,2,13,.92); backdrop-filter:blur(4px);
-    z-index:120; opacity:0; pointer-events:none; transition:opacity .25s ease;
+    position:fixed; inset:0; z-index:120; opacity:0; pointer-events:none; transition:opacity .25s ease;
     display:flex; align-items:center; justify-content:center; padding:24px;
+    background:radial-gradient(circle at 50% 42%, rgba(80,20,140,.45), rgba(10,4,20,.62) 68%);
+    backdrop-filter:blur(3px);
   }
   .banner-lightbox.open{ opacity:1; pointer-events:auto; }
-  .banner-lightbox img{
-    max-width:100%; max-height:90vh; border-radius:14px;
-    box-shadow:0 20px 60px rgba(0,0,0,.5);
-    transform:scale(.96); transition:transform .25s ease;
+  .banner-lightbox-frame{
+    position:relative; width:min(360px, 82vw);
+    transform:scale(.94); transition:transform .25s ease;
   }
-  .banner-lightbox.open img{ transform:scale(1); }
+  .banner-lightbox.open .banner-lightbox-frame{ transform:scale(1); }
+  .banner-lightbox-frame img{
+    width:100%; display:block; border-radius:20px;
+    border:1.5px solid rgba(216,180,255,.55);
+    animation:bannerGlow 2.4s ease-in-out infinite;
+  }
+  @keyframes bannerGlow{
+    0%,100%{ box-shadow:0 0 22px 3px rgba(147,58,255,.4), 0 0 46px 8px rgba(147,58,255,.18); }
+    50%{ box-shadow:0 0 34px 8px rgba(180,110,255,.7), 0 0 70px 16px rgba(147,58,255,.32); }
+  }
+  .banner-bolt{
+    position:absolute; width:15%; pointer-events:none; z-index:1;
+    filter:drop-shadow(0 0 6px rgba(190,120,255,.85)) drop-shadow(0 0 14px rgba(147,58,255,.55));
+    animation:boltFlicker 2.6s infinite;
+    opacity:.2;
+  }
+  @keyframes boltFlicker{
+    0%, 100%{ opacity:.12; }
+    6%{ opacity:1; }
+    9%{ opacity:.15; }
+    13%{ opacity:.9; }
+    18%{ opacity:.15; }
+    55%{ opacity:.1; }
+    60%{ opacity:.75; }
+    64%{ opacity:.15; }
+  }
   .banner-lightbox-close{
-    position:absolute; top:18px; right:18px; z-index:2;
-    width:40px; height:40px; border-radius:50%; border:none; cursor:pointer;
-    background:rgba(18,8,33,.85); color:#fff; font-size:19px; font-weight:800;
+    position:absolute; top:-16px; right:-14px; z-index:3;
+    width:36px; height:36px; border-radius:50%; border:1.5px solid rgba(216,180,255,.5); cursor:pointer;
+    background:rgba(18,8,33,.9); color:#fff; font-size:16px; font-weight:800;
     display:flex; align-items:center; justify-content:center;
   }
   .banner-lightbox-close:hover{ background:var(--red); }
@@ -691,8 +716,16 @@
   <div class="banner-track" id="bannerTrack"></div>
 </div>
 <div class="banner-lightbox" id="bannerLightbox" onclick="if(event.target===this) fecharBannerLightbox()">
-  <button type="button" class="banner-lightbox-close" onclick="fecharBannerLightbox()">✕</button>
-  <img id="bannerLightboxImg" src="" alt="Anúncio">
+  <div class="banner-lightbox-frame">
+    <svg class="banner-bolt" style="top:-14%;left:-12%;transform:rotate(-25deg);animation-delay:.0s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <svg class="banner-bolt" style="top:-16%;right:-10%;transform:rotate(35deg) scaleX(-1);animation-delay:.4s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <svg class="banner-bolt" style="bottom:-14%;left:-14%;transform:rotate(-140deg);animation-delay:.9s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <svg class="banner-bolt" style="bottom:-16%;right:-12%;transform:rotate(150deg) scaleX(-1);animation-delay:1.3s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <svg class="banner-bolt" style="top:-18%;left:38%;transform:rotate(0deg);animation-delay:1.7s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <svg class="banner-bolt" style="bottom:-18%;left:38%;transform:rotate(180deg);animation-delay:2.1s;" viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1.5 8L21 9h-8l0-7z" fill="#c084fc"/></svg>
+    <button type="button" class="banner-lightbox-close" onclick="fecharBannerLightbox()">✕</button>
+    <img id="bannerLightboxImg" src="" alt="Anúncio">
+  </div>
 </div>
 <div class="banner-admin-wrap">
   <button type="button" class="banner-add-btn" id="btnAddBanner" style="display:none;">+ Adicionar anúncio (foto)</button>
