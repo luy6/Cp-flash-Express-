@@ -230,7 +230,24 @@
     font-weight:700; cursor:pointer; text-transform:uppercase; font-size:13px; letter-spacing:.03em;
   }
   .banner-add-btn:hover{ border-color:var(--red); color:var(--white); }
-  .banner-admin-wrap{ max-width:1180px; margin:0 auto; padding:0 5vw; }
+  .banner-admin-wrap{ max-width:1320px; margin:0 auto; padding:0 4vw; }
+  .banner-admin-list{
+    display:flex; flex-wrap:wrap; gap:10px; margin:12px auto 0;
+    max-width:1320px; padding:0 4vw;
+  }
+  .banner-admin-item{
+    position:relative; width:92px; height:60px; border-radius:10px; overflow:hidden;
+    border:1px solid var(--line); flex-shrink:0;
+  }
+  .banner-admin-item img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .banner-admin-item.ativo{ outline:2px solid var(--red); outline-offset:2px; }
+  .banner-admin-item button{
+    position:absolute; top:3px; right:3px; z-index:2;
+    width:20px; height:20px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(18,8,33,.85); color:#fff; font-size:11px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .banner-admin-item button:hover{ background:var(--red); }
 
   /* ---------- bolt divider (signature) ---------- */
   .bolt-divider{
@@ -656,6 +673,7 @@
 </div>
 <div class="banner-admin-wrap">
   <button type="button" class="banner-add-btn" id="btnAddBanner" style="display:none;">+ Adicionar anúncio (foto)</button>
+  <div class="banner-admin-list" id="bannerAdminList"></div>
 </div>
 
 <!-- HERO -->
@@ -1231,6 +1249,12 @@ function atualizarSlidesBanner(){
   track.querySelectorAll('.banner-dot').forEach((el, i) => {
     el.classList.toggle('ativo', i === bannerSlideAtual);
   });
+  const adminList = document.getElementById('bannerAdminList');
+  if(adminList){
+    adminList.querySelectorAll('.banner-admin-item').forEach((el, i) => {
+      el.classList.toggle('ativo', i === bannerSlideAtual);
+    });
+  }
 }
 
 function reiniciarAutoplayBanner(){
@@ -1246,12 +1270,32 @@ function renderBanners(){
   const wrap = document.getElementById('bannerCarousel');
   const track = document.getElementById('bannerTrack');
   const addBtn = document.getElementById('btnAddBanner');
+  const adminList = document.getElementById('bannerAdminList');
   if(!wrap || !track) return;
 
   if(bannerSlideAtual >= BANNERS.length) bannerSlideAtual = 0;
 
   wrap.classList.toggle('vazio', BANNERS.length === 0 && !modoAdmin);
   if(addBtn) addBtn.style.display = modoAdmin ? 'flex' : 'none';
+
+  if(adminList){
+    adminList.innerHTML = '';
+    if(modoAdmin && BANNERS.length > 0){
+      BANNERS.forEach((b, i) => {
+        const item = document.createElement('div');
+        item.className = 'banner-admin-item' + (i === bannerSlideAtual ? ' ativo' : '');
+        item.innerHTML = `<img src="${b.image}" alt="Anúncio ${i+1}">`;
+        item.querySelector('img').onclick = () => irParaSlideBanner(i);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.title = 'Remover este anúncio';
+        del.textContent = '✕';
+        del.onclick = (ev) => { ev.stopPropagation(); removerBanner(b.id); };
+        item.appendChild(del);
+        adminList.appendChild(item);
+      });
+    }
+  }
 
   track.innerHTML = '';
   if(BANNERS.length === 0){
