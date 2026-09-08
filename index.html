@@ -1098,6 +1098,20 @@ function taxaHorarioAtiva(){
 function taxaEspecialAtiva(){
   return !!taxaHorarioAtiva();
 }
+/* Bairro com taxa 0 significa "valor calculado por distância": não soma ao total
+   e nunca é afetado pela taxa por horário. Bairros com ignorarHorario:true mantêm
+   sempre o próprio valor cadastrado, mesmo com uma faixa de horário ativa. */
+function bairroCalculadoPorDistancia(zone){
+  return !!zone && Number(zone.fee) === 0;
+}
+function calcularTaxaEntrega(zone){
+  if(!zone) return 0;
+  if(bairroCalculadoPorDistancia(zone)) return 0;
+  const ativa = taxaHorarioAtiva();
+  if(ativa && !zone.ignorarHorario) return Math.max(0, ativa.valor);
+  return zone.fee;
+}
+// mantido por compatibilidade com chamadas antigas que não têm o bairro (aplica a todos)
 function taxaComHorario(feeBase){
   const ativa = taxaHorarioAtiva();
   return ativa ? Math.max(0, ativa.valor) : feeBase;
@@ -1122,14 +1136,18 @@ function migrarHorarioTaxa(dados){
 function populateZones(){
   const sel = document.getElementById('zoneSelect');
   const anterior = sel.value;
-  const ativa = taxaHorarioAtiva();
   sel.innerHTML = '<option value="">Selecione seu bairro</option>';
   DELIVERY_ZONES.forEach(z => {
     const opt = document.createElement('option');
     opt.value = z.id;
-    opt.textContent = ativa
-      ? `${z.name} — ${money(ativa.valor)} (${ativa.nome})`
-      : `${z.name} — ${money(z.fee)}`;
+    if(bairroCalculadoPorDistancia(z)){
+      opt.textContent = `${z.name} — Calculado por distância`;
+    } else {
+      const ativa = !z.ignorarHorario ? taxaHorarioAtiva() : null;
+      opt.textContent = ativa
+        ? `${z.name} — ${money(ativa.valor)} (${ativa.nome})`
+        : `${z.name} — ${money(z.fee)}`;
+    }
     sel.appendChild(opt);
   });
   if(DELIVERY_ZONES.find(z=>z.id===anterior)) sel.value = anterior;
@@ -1999,9 +2017,11 @@ function renderizarListaZonas(){
   DELIVERY_ZONES.forEach((z) => {
     const row = document.createElement('div');
     row.className = 'zona-row';
+    const valorLabel = bairroCalculadoPorDistancia(z) ? 'Calculado por distância' : money(z.fee);
+    const tagFixa = z.ignorarHorario ? ' 🔒' : '';
     row.innerHTML = `
-      <span class="zona-nome">${z.name}</span>
-      <span class="zona-valor">${money(z.fee)}</span>
+      <span class="zona-nome">${z.name}${tagFixa}</span>
+      <span class="zona-valor">${valorLabel}</span>
       <div class="zona-botoes">
         <button type="button" class="cat-admin-btn" title="Editar">✎</button>
         <button type="button" class="cat-admin-btn excluir" title="Remover">🗑</button>
@@ -2010,12 +2030,19 @@ function renderizarListaZonas(){
     row.querySelectorAll('button')[0].onclick = () => {
       const nome = prompt('Nome do bairro:', z.name);
       if(!nome || !nome.trim()) return;
-      const taxaTxt = prompt('Taxa de entrega (R$):', z.fee);
+      const taxaTxt = prompt('Taxa de entrega (R$). Use 0 para "calculado por distância":', z.fee);
       if(taxaTxt === null) return;
       const taxa = parseFloat(taxaTxt.replace(',', '.'));
-      if(isNaN(taxa)){ alert('Taxa inválida.'); return; }
+      if(isNaN(taxa) || taxa < 0){ alert('Taxa inválida.'); return; }
+      let ignorarHorario = z.ignorarHorario;
+      if(taxa > 0){
+        ignorarHorario = confirm('Este bairro deve MANTER sempre este valor, mesmo quando a taxa por horário estiver ativa?\n\nOK = manter valor fixo\nCancelar = seguir a taxa por horário normalmente');
+      } else {
+        ignorarHorario = false; // bairro "a calcular" não usa taxa por horário de qualquer forma
+      }
       z.name = nome.trim();
       z.fee = taxa;
+      z.ignorarHorario = ignorarHorario;
       salvarDados();
       populateZones();
       renderizarListaZonas();
@@ -2038,11 +2065,15 @@ document.getElementById('zonasOverlay').addEventListener('click', (ev) => {
 document.getElementById('btnNovaZona').addEventListener('click', () => {
   const nome = prompt('Nome do novo bairro:');
   if(!nome || !nome.trim()) return;
-  const taxaTxt = prompt('Taxa de entrega (R$):', '5.00');
+  const taxaTxt = prompt('Taxa de entrega (R$). Use 0 para "calculado por distância":', '5.00');
   if(taxaTxt === null) return;
   const taxa = parseFloat(taxaTxt.replace(',', '.'));
-  if(isNaN(taxa)){ alert('Taxa inválida.'); return; }
-  DELIVERY_ZONES.push({ id:'zona-'+(proximoIdZona++), name:nome.trim(), fee:taxa });
+  if(isNaN(taxa) || taxa < 0){ alert('Taxa inválida.'); return; }
+  let ignorarHorario = false;
+  if(taxa > 0){
+    ignorarHorario = confirm('Este bairro deve MANTER sempre este valor, mesmo quando a taxa por horário estiver ativa?\n\nOK = manter valor fixo\nCancelar = seguir a taxa por horário normalmente');
+  }
+  DELIVERY_ZONES.push({ id:'zona-'+(proximoIdZona++), name:nome.trim(), fee:taxa, ignorarHorario });
   salvarDados();
   populateZones();
   renderizarListaZonas();
@@ -2575,7 +2606,8 @@ function updateModalSummary(){
   const items = Object.values(cart);
   const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
   const zone = getZone();
-  let fee = zone ? taxaComHorario(zone.fee) : 0;
+  const calculadoPorDistancia = bairroCalculadoPorDistancia(zone);
+  let fee = zone ? calcularTaxaEntrega(zone) : 0;
   const desconto = calcularDesconto(subtotal);
   const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
   if(freteGratis) fee = 0;
@@ -2584,7 +2616,7 @@ function updateModalSummary(){
   document.getElementById('modalSubtotal').textContent = money(subtotal);
   const avisoHorario = document.getElementById('modalAvisoHorario');
   if(avisoHorario){
-    const ativaHorario = taxaHorarioAtiva();
+    const ativaHorario = (zone && !zone.ignorarHorario && !calculadoPorDistancia) ? taxaHorarioAtiva() : null;
     if(!freteGratis && zone && ativaHorario){
       avisoHorario.textContent = `⏰ ${ativaHorario.nome}: taxa de entrega de ${money(ativaHorario.valor)} aplicada`;
       avisoHorario.style.display = 'block';
@@ -2604,7 +2636,7 @@ function updateModalSummary(){
     if(cupomAplicado && cupomAplicado.type === 'brinde') document.getElementById('modalBrinde').textContent = cupomAplicado.brindeDesc;
   }
 
-  document.getElementById('modalFee').textContent = freteGratis ? 'Grátis' : money(fee);
+  document.getElementById('modalFee').textContent = freteGratis ? 'Grátis' : (calculadoPorDistancia ? 'Calculado por distância' : money(fee));
   document.getElementById('modalTotal').textContent = money(Math.max(0, subtotal - desconto + fee));
 }
 
@@ -2627,8 +2659,9 @@ function sendOrder(){
   const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
   const desconto = calcularDesconto(subtotal);
   const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
-  const ativaHorario = !freteGratis ? taxaHorarioAtiva() : null;
-  const fee = freteGratis ? 0 : taxaComHorario(zone.fee);
+  const calculadoPorDistancia = bairroCalculadoPorDistancia(zone);
+  const ativaHorario = (!freteGratis && !zone.ignorarHorario && !calculadoPorDistancia) ? taxaHorarioAtiva() : null;
+  const fee = freteGratis ? 0 : calcularTaxaEntrega(zone);
   const total = Math.max(0, subtotal - desconto + fee);
 
   let msg = 'Pedido Flash Express:%0A%0A';
@@ -2641,7 +2674,7 @@ function sendOrder(){
     msg += `%0ACupom aplicado: ${cupomAplicado.code} (${detalheCupom(cupomAplicado)})`;
   }
   if(desconto > 0) msg += `%0ADesconto: - ${money(desconto)}`;
-  msg += `%0ATaxa de entrega (${zone.name}): ${freteGratis ? 'Grátis' : money(fee)}`;
+  msg += `%0ATaxa de entrega (${zone.name}): ${freteGratis ? 'Grátis' : (calculadoPorDistancia ? 'A combinar (calculado por distância)' : money(fee))}`;
   if(ativaHorario) msg += ` (${ativaHorario.nome})`;
   msg += `%0A*Total: ${money(total)}*`;
   if(cupomAplicado && cupomAplicado.type === 'brinde'){
