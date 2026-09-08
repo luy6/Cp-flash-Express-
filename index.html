@@ -311,6 +311,26 @@
   .eyebrow{ font-family:'Space Mono'; font-size:11px; letter-spacing:.2em; color:var(--red); text-transform:uppercase; }
   h2.section-title{ font-family:'Anton'; font-size:clamp(26px,4vw,40px); text-transform:uppercase; letter-spacing:.5px; margin-top:6px; }
 
+  /* ---------- busca + filtro de categorias ---------- */
+  .busca-filtro-wrap{ max-width:1320px; margin:0 auto; padding:0 4vw; }
+  .search-bar{
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px 16px; margin-bottom:16px;
+  }
+  .search-bar:focus-within{ border-color:var(--red); }
+  .search-icon{ font-size:15px; opacity:.7; flex:0 0 auto; }
+  .search-input{
+    flex:1; background:transparent; border:none; outline:none; color:var(--white);
+    font-family:'Manrope'; font-size:14px; font-weight:600;
+  }
+  .search-input::placeholder{ color:var(--muted); }
+  .search-clear{
+    flex:0 0 auto; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+    width:24px; height:24px; border-radius:50%; cursor:pointer; font-size:12px; line-height:1;
+  }
+  .search-clear:hover{ color:var(--white); border-color:var(--red); }
+
   /* ---------- category tabs ---------- */
   .tabs{
     display:flex; gap:10px; overflow-x:auto; padding-bottom:14px; margin-bottom:30px;
@@ -344,6 +364,12 @@
   }
   .card h3{ font-family:'Anton'; font-size:19px; text-transform:uppercase; letter-spacing:.3px; padding-right:60px; }
   .card p.desc{ color:var(--muted); font-size:13px; line-height:1.55; flex:1; }
+  .min-qtd{
+    display:inline-block; align-self:flex-start;
+    font-family:'Space Mono'; font-size:10.5px; color:var(--red);
+    border:1px solid rgba(255,31,61,.4); background:rgba(255,31,61,.08);
+    padding:3px 8px; border-radius:999px; letter-spacing:.02em;
+  }
   .card .row{ display:flex; align-items:center; justify-content:space-between; margin-top:4px; }
   .price{ font-family:'Space Mono'; font-weight:700; font-size:17px; color:var(--white); }
   .price small{ color:var(--muted); font-size:11px; }
@@ -411,6 +437,10 @@
   }
   .field-select:focus, .field-input:focus{ border-color:var(--red); }
   .sum-row{ display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:8px; }
+  .aviso-horario{
+    font-size:11px; color:var(--violet-glow); background:rgba(139,59,255,.12);
+    border:1px solid rgba(185,139,255,.3); border-radius:8px; padding:7px 10px; margin-bottom:10px;
+  }
   .total-row{ display:flex; justify-content:space-between; font-family:'Space Mono'; font-size:15px; margin-bottom:14px; padding-top:10px; border-top:1px solid var(--line); }
   .total-row b{ font-size:20px; color:var(--white); }
   .checkout-btn{ width:100%; padding:15px; font-size:14px; }
@@ -712,6 +742,32 @@
     </div>
     <div id="listaZonas"></div>
     <button class="add-item-btn" type="button" id="btnNovaZona" style="margin:14px auto 0; display:block;">+ Novo bairro</button>
+
+    <div style="border-top:1px solid var(--line); margin-top:18px; padding-top:16px;">
+      <h3 style="font-family:'Anton'; font-size:15px; text-transform:uppercase; margin-bottom:4px;">Taxa por horário</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5;">Some ou desconte um valor da taxa de entrega automaticamente durante um horário específico (ex: taxa noturna).</p>
+      <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:12px; cursor:pointer;">
+        <input type="checkbox" id="thAtivo" style="width:16px; height:16px;">
+        Ativar taxa por horário
+      </label>
+      <div id="thCampos" style="display:grid; gap:10px;">
+        <div class="field-row" style="display:flex; gap:10px;">
+          <div class="field-group">
+            <label>Início</label>
+            <input class="field-input" type="time" id="thInicio">
+          </div>
+          <div class="field-group">
+            <label>Fim</label>
+            <input class="field-input" type="time" id="thFim">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Valor a somar na taxa (use negativo para desconto)</label>
+          <input class="field-input" type="number" step="0.01" id="thValor" placeholder="Ex: 5.00">
+        </div>
+        <button type="button" class="add-item-btn" id="btnSalvarHorarioTaxa" style="width:100%;">Salvar taxa por horário</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -814,6 +870,15 @@
   <svg viewBox="0 0 40 60" fill="none"><path d="M24 2L8 34H19L15 58L33 24H21L24 2Z" fill="#ff1f3d"/></svg>
 </div>
 
+<div class="busca-filtro-wrap">
+  <div class="tabs" id="tabsCategorias"></div>
+  <div class="search-bar">
+    <span class="search-icon">🔎</span>
+    <input type="text" id="inputBusca" class="search-input" placeholder="Buscar bebida...">
+    <button type="button" class="search-clear" id="btnLimparBusca" style="display:none;">✕</button>
+  </div>
+</div>
+
 <div id="menuSections"></div>
 
 <!-- COMO FUNCIONA -->
@@ -909,6 +974,7 @@
         <div class="sum-row" id="modalDescontoRow" style="display:none;"><span>Desconto (cupom)</span><span id="modalDesconto">- R$ 0,00</span></div>
         <div class="sum-row" id="modalBrindeRow" style="display:none;"><span>Brinde do cupom</span><span id="modalBrinde"></span></div>
         <div class="sum-row"><span>Taxa de entrega</span><span id="modalFee">R$ 0,00</span></div>
+        <div class="aviso-horario" id="modalAvisoHorario" style="display:none;">⏰ Taxa de horário especial aplicada</div>
         <div class="total-row"><span>Total</span><b id="modalTotal">R$ 0,00</b></div>
       </div>
     </div>
@@ -1022,14 +1088,41 @@ let DELIVERY_ZONES = [
 let selectedZoneId = '';
 let proximoIdZona = 100;
 
+/* taxa especial por horário: soma (ou desconta) um valor na taxa de entrega
+   durante uma janela de horário definida pelo admin (ex: taxa noturna) */
+let TAXA_HORARIO_ESPECIAL = { ativo:false, inicio:'22:00', fim:'06:00', valor:5.0 };
+
+function horarioParaMinutos(hhmm){
+  const [h,m] = String(hhmm).split(':').map(Number);
+  return (h||0)*60 + (m||0);
+}
+function taxaEspecialAtiva(){
+  if(!TAXA_HORARIO_ESPECIAL.ativo) return false;
+  const agora = new Date();
+  const minAgora = agora.getHours()*60 + agora.getMinutes();
+  const minIni = horarioParaMinutos(TAXA_HORARIO_ESPECIAL.inicio);
+  const minFim = horarioParaMinutos(TAXA_HORARIO_ESPECIAL.fim);
+  if(minIni === minFim) return false;
+  if(minIni < minFim) return minAgora >= minIni && minAgora < minFim;
+  return minAgora >= minIni || minAgora < minFim; // janela que passa da meia-noite
+}
+function taxaComHorario(feeBase){
+  if(taxaEspecialAtiva()) return Math.max(0, feeBase + TAXA_HORARIO_ESPECIAL.valor);
+  return feeBase;
+}
+
 function populateZones(){
   const sel = document.getElementById('zoneSelect');
   const anterior = sel.value;
+  const especialAtiva = taxaEspecialAtiva();
   sel.innerHTML = '<option value="">Selecione seu bairro</option>';
   DELIVERY_ZONES.forEach(z => {
     const opt = document.createElement('option');
     opt.value = z.id;
-    opt.textContent = `${z.name} — ${money(z.fee)}`;
+    const feeAtual = taxaComHorario(z.fee);
+    opt.textContent = especialAtiva
+      ? `${z.name} — ${money(feeAtual)} (horário especial)`
+      : `${z.name} — ${money(z.fee)}`;
     sel.appendChild(opt);
   });
   if(DELIVERY_ZONES.find(z=>z.id===anterior)) sel.value = anterior;
@@ -1055,19 +1148,25 @@ function findProduct(id){
   }
 }
 
+function minimoDe(p){
+  const m = parseInt(p && p.minQty, 10);
+  return (!isNaN(m) && m > 1) ? m : 1;
+}
 function addItem(id){
   const p = findProduct(id);
   if(!p) return;
+  const min = minimoDe(p);
   if(!cart[id]) cart[id] = {product:p, qty:0, flavor:''};
-  cart[id].qty++;
+  cart[id].qty += (cart[id].qty === 0 ? min : 1);
   renderControl(p);
   renderCart();
 }
 function decItem(id){
   if(!cart[id]) return;
-  cart[id].qty--;
   const p = cart[id].product;
-  if(cart[id].qty <= 0) delete cart[id];
+  const min = minimoDe(p);
+  cart[id].qty--;
+  if(cart[id].qty < min) delete cart[id];
   renderControl(p);
   renderCart();
 }
@@ -1079,8 +1178,9 @@ function addFlavorToCart(productId, sabor){
   const p = findProduct(productId);
   if(!p) return;
   const k = chaveComSabor(productId, sabor);
+  const min = minimoDe(p);
   if(!cart[k]) cart[k] = {product:p, qty:0, flavor:sabor};
-  cart[k].qty++;
+  cart[k].qty += (cart[k].qty === 0 ? min : 1);
   renderCart();
 }
 function cartInc(key){
@@ -1096,8 +1196,9 @@ function cartInc(key){
 function cartDec(key){
   const entry = cart[key];
   if(!entry) return;
+  const min = minimoDe(entry.product);
   entry.qty--;
-  if(entry.qty <= 0) delete cart[key];
+  if(entry.qty < min) delete cart[key];
   renderCart();
   if(key.indexOf('__') === -1){
     const p = findProduct(key);
@@ -1160,6 +1261,14 @@ const observer = new IntersectionObserver((entries)=>{
 const SENHA_ADMIN = "flash2026"; // troque essa senha antes de publicar o site
 let modoAdmin = false;
 let formAbertoCat = null; // id da categoria com o formulário de "novo item" aberto
+let filtroCategoriaAtual = 'todos'; // filtro de categoria escolhido pelo cliente
+let buscaAtual = ''; // termo digitado na barra de busca
+
+function normalizarTexto(txt){
+  return String(txt || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos
+}
 let fotoNovoItem = null;  // foto escolhida enquanto o formulário de novo item está aberto
 
 function abrirLoginAdmin(){
@@ -1295,6 +1404,7 @@ if(firebaseConfigurado){
       if(Array.isArray(dados.zones) && dados.zones.length) DELIVERY_ZONES = dados.zones;
       if(Array.isArray(dados.banners)) BANNERS = dados.banners;
       if(Array.isArray(dados.coupons)) COUPONS = dados.coupons;
+      if(dados.horarioTaxa) TAXA_HORARIO_ESPECIAL = dados.horarioTaxa;
       carregouDaNuvemUmaVez = true;
       populateZones();
       renderAll();
@@ -1307,7 +1417,7 @@ if(firebaseConfigurado){
 }
 
 function salvarDados(){
-  const dados = { categories: CATEGORIES, zones: DELIVERY_ZONES, banners: BANNERS, coupons: COUPONS };
+  const dados = { categories: CATEGORIES, zones: DELIVERY_ZONES, banners: BANNERS, coupons: COUPONS, horarioTaxa: TAXA_HORARIO_ESPECIAL };
   const jsonStr = JSON.stringify(dados);
   // sempre guarda uma cópia local (funciona mesmo sem internet)
   try{
@@ -1336,6 +1446,7 @@ function carregarDados(){
     if(Array.isArray(dados.zones) && dados.zones.length) DELIVERY_ZONES = dados.zones;
     if(Array.isArray(dados.banners)) BANNERS = dados.banners;
     if(Array.isArray(dados.coupons)) COUPONS = dados.coupons;
+    if(dados.horarioTaxa) TAXA_HORARIO_ESPECIAL = dados.horarioTaxa;
   }catch(e){
     console.warn('Não foi possível carregar os dados salvos:', e);
   }
@@ -1506,8 +1617,11 @@ function adicionarItem(catId){
   const descInp = document.getElementById(`novaDesc-${catId}`);
   const precoInp = document.getElementById(`novoPreco-${catId}`);
   const abvInp = document.getElementById(`novoAbv-${catId}`);
+  const minInp = document.getElementById(`novoMin-${catId}`);
   const nome = nomeInp.value.trim();
   const preco = parseFloat(precoInp.value.replace(',', '.'));
+  let minQty = parseInt(minInp.value, 10);
+  if(isNaN(minQty) || minQty < 1) minQty = 1;
 
   if(!nome || isNaN(preco)){
     alert('Preencha ao menos o nome e o preço do item.');
@@ -1520,6 +1634,7 @@ function adicionarItem(catId){
     desc: descInp.value.trim(),
     price: preco,
     abv: abvInp.value.trim(),
+    minQty: minQty,
     image: fotoNovoItem || '',
     flavors: []
   });
@@ -1541,14 +1656,20 @@ function editarItem(catId, prodId){
   if(novoPrecoTxt === null) return;
   const novoPreco = parseFloat(novoPrecoTxt.replace(',', '.'));
   const novoAbv = prompt('Teor alcoólico / selo (opcional, ex: 5%):', p.abv || '');
+  if(novoAbv === null) return;
+  const novoMinTxt = prompt('Pedido mínimo (quantidade mínima de unidades por pedido). Deixe 1 se não houver mínimo:', p.minQty || 1);
+  if(novoMinTxt === null) return;
   if(!novoNome.trim() || isNaN(novoPreco)){
     alert('Nome e preço são obrigatórios.');
     return;
   }
+  let novoMin = parseInt(novoMinTxt, 10);
+  if(isNaN(novoMin) || novoMin < 1) novoMin = 1;
   p.name = novoNome.trim();
   p.desc = novaDesc.trim();
   p.price = novoPreco;
   p.abv = (novoAbv||'').trim();
+  p.minQty = novoMin;
   salvarDados();
   renderAll();
 }
@@ -1640,11 +1761,43 @@ function removerCategoria(catId){
 /* ================= MODO DE ALTERAÇÃO: TAXAS DE ENTREGA ================= */
 function abrirZonasOverlay(){
   renderizarListaZonas();
+  preencherFormHorarioTaxa();
   document.getElementById('zonasOverlay').classList.add('aberto');
 }
 function fecharZonasOverlay(){
   document.getElementById('zonasOverlay').classList.remove('aberto');
 }
+
+/* ---------------- taxa por horário (formulário do admin) ---------------- */
+function preencherFormHorarioTaxa(){
+  document.getElementById('thAtivo').checked = !!TAXA_HORARIO_ESPECIAL.ativo;
+  document.getElementById('thInicio').value = TAXA_HORARIO_ESPECIAL.inicio || '22:00';
+  document.getElementById('thFim').value = TAXA_HORARIO_ESPECIAL.fim || '06:00';
+  document.getElementById('thValor').value = TAXA_HORARIO_ESPECIAL.valor;
+  atualizarEstadoCamposHorarioTaxa();
+}
+function atualizarEstadoCamposHorarioTaxa(){
+  const ativo = document.getElementById('thAtivo').checked;
+  document.getElementById('thCampos').style.opacity = ativo ? '1' : '.5';
+  ['thInicio','thFim','thValor'].forEach(id => document.getElementById(id).disabled = !ativo);
+}
+document.getElementById('thAtivo').addEventListener('change', atualizarEstadoCamposHorarioTaxa);
+document.getElementById('btnSalvarHorarioTaxa').addEventListener('click', () => {
+  const ativo = document.getElementById('thAtivo').checked;
+  const inicio = document.getElementById('thInicio').value;
+  const fim = document.getElementById('thFim').value;
+  const valor = parseFloat(String(document.getElementById('thValor').value).replace(',', '.'));
+
+  if(ativo){
+    if(!inicio || !fim){ alert('Informe o horário de início e fim.'); return; }
+    if(isNaN(valor)){ alert('Informe um valor numérico para a taxa (pode ser negativo).'); return; }
+  }
+  TAXA_HORARIO_ESPECIAL = { ativo, inicio: inicio || '22:00', fim: fim || '06:00', valor: isNaN(valor) ? 0 : valor };
+  salvarDados();
+  populateZones();
+  updateModalSummary();
+  alert('Taxa por horário salva!');
+});
 function renderizarListaZonas(){
   const lista = document.getElementById('listaZonas');
   lista.innerHTML = '';
@@ -1928,15 +2081,77 @@ document.getElementById('inputCupom').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') aplicarCupom();
 });
 
+/* ================= BUSCA E FILTRO DE CATEGORIAS (cliente) ================= */
+const inputBusca = document.getElementById('inputBusca');
+const btnLimparBusca = document.getElementById('btnLimparBusca');
+inputBusca.addEventListener('input', () => {
+  buscaAtual = inputBusca.value;
+  btnLimparBusca.style.display = buscaAtual ? 'block' : 'none';
+  renderAll();
+});
+btnLimparBusca.addEventListener('click', () => {
+  buscaAtual = '';
+  inputBusca.value = '';
+  btnLimparBusca.style.display = 'none';
+  renderAll();
+});
+
 /* ================= RENDERIZAÇÃO DO CARDÁPIO (nav + seções + cards) ================= */
+function renderFiltros(){
+  const wrap = document.getElementById('tabsCategorias');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  if(modoAdmin){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+
+  if(!CATEGORIES.find(c => c.id === filtroCategoriaAtual)) filtroCategoriaAtual = 'todos';
+
+  const criarTab = (id, nome) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'tab' + (filtroCategoriaAtual === id ? ' active' : '');
+    tab.textContent = nome;
+    tab.onclick = () => { filtroCategoriaAtual = id; renderAll(); };
+    wrap.appendChild(tab);
+  };
+  criarTab('todos', 'Todos');
+  CATEGORIES.forEach(cat => criarTab(cat.id, cat.name));
+}
+
 function renderAll(){
   renderBanners();
+  renderFiltros();
   const nav = document.getElementById('navLinks');
   const container = document.getElementById('menuSections');
   nav.innerHTML = '';
   container.innerHTML = '';
 
-  CATEGORIES.forEach((cat, i) => {
+  const buscaAtiva = !modoAdmin && buscaAtual.trim().length > 0;
+  const termoBusca = normalizarTexto(buscaAtual);
+
+  let itensExibir = CATEGORIES.map(cat => {
+    let produtos = cat.products;
+    if(buscaAtiva){
+      produtos = produtos.filter(p =>
+        normalizarTexto(p.name).includes(termoBusca) ||
+        normalizarTexto(p.desc || '').includes(termoBusca)
+      );
+    }
+    return { cat, produtos };
+  });
+
+  if(!modoAdmin && filtroCategoriaAtual !== 'todos'){
+    itensExibir = itensExibir.filter(it => it.cat.id === filtroCategoriaAtual);
+  }
+  if(buscaAtiva){
+    itensExibir = itensExibir.filter(it => it.produtos.length > 0);
+  }
+
+  if(!modoAdmin && itensExibir.length === 0){
+    container.innerHTML = '<div class="empty-state" style="padding:60px 0;">Nenhum item encontrado ⚡<br>Tente outra busca ou categoria.</div>';
+  }
+
+  itensExibir.forEach(({cat, produtos}, i) => {
     const a = document.createElement('a');
     a.href = '#' + cat.id;
     a.textContent = cat.name;
@@ -1969,7 +2184,7 @@ function renderAll(){
       ctrlWrap.className = 'cat-admin-row';
       const botoes = [
         ['▲','Mover categoria para cima', i===0, () => moverCategoria(cat.id,-1)],
-        ['▼','Mover categoria para baixo', i===CATEGORIES.length-1, () => moverCategoria(cat.id,1)],
+        ['▼','Mover categoria para baixo', i===itensExibir.length-1, () => moverCategoria(cat.id,1)],
         ['✎','Renomear categoria', false, () => renomearCategoria(cat.id)],
         ['🗑','Excluir categoria', false, () => removerCategoria(cat.id)],
       ];
@@ -2001,6 +2216,7 @@ function renderAll(){
         <input type="text" id="novaDesc-${cat.id}" placeholder="Descrição (opcional)">
         <input type="text" id="novoPreco-${cat.id}" placeholder="Preço (ex: 12.90)">
         <input type="text" id="novoAbv-${cat.id}" placeholder="Teor alcoólico / selo (opcional, ex: 5%)">
+        <input type="text" id="novoMin-${cat.id}" placeholder="Pedido mínimo (un) — deixe em branco para 1" inputmode="numeric">
         <button type="button" class="add-item-btn" id="btnFotoNovoItem-${cat.id}" style="width:100%;">${fotoNovoItem ? '📷 Foto escolhida ✓ (toque para trocar)' : '📷 Escolher foto (opcional)'}</button>
         <div class="linha-botoes">
           <button type="button" class="btn-cancelar-item">Cancelar</button>
@@ -2017,10 +2233,10 @@ function renderAll(){
 
     const grid = document.createElement('div');
     grid.className = 'grid';
-    if(cat.products.length === 0){
-      grid.innerHTML = '<div class="empty-state">Em breve novidades nessa categoria ⚡</div>';
+    if(produtos.length === 0){
+      grid.innerHTML = `<div class="empty-state">${buscaAtiva ? 'Nenhum item encontrado nessa categoria ⚡' : 'Em breve novidades nessa categoria ⚡'}</div>`;
     } else {
-      cat.products.forEach(p => grid.appendChild(criarCardProduto(cat.id, p)));
+      produtos.forEach(p => grid.appendChild(criarCardProduto(cat.id, p)));
     }
     section.appendChild(grid);
 
@@ -2062,6 +2278,7 @@ function criarCardProduto(catId, p){
       : (modoAdmin ? `<div class="card-photo-vazia" title="Adicionar foto">📷 Adicionar foto</div>` : '')}
     <h3>${p.name}</h3>
     <p class="desc">${p.desc || ''}</p>
+    ${(p.minQty && p.minQty > 1) ? `<div class="min-qtd">Pedido mínimo: ${p.minQty} un</div>` : ''}
     ${(!modoAdmin && p.flavors && p.flavors.length) ? `<p class="cart-flavor-tag">${p.flavors.length} sabor(es) disponível(is)</p>` : ''}
     <div class="row">
       <div class="price">${money(p.price)}</div>
@@ -2167,13 +2384,17 @@ function updateModalSummary(){
   const items = Object.values(cart);
   const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
   const zone = getZone();
-  let fee = zone ? zone.fee : 0;
+  let fee = zone ? taxaComHorario(zone.fee) : 0;
   const desconto = calcularDesconto(subtotal);
   const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
   if(freteGratis) fee = 0;
 
   document.getElementById('modalZoneName').textContent = zone ? zone.name : '—';
   document.getElementById('modalSubtotal').textContent = money(subtotal);
+  const avisoHorario = document.getElementById('modalAvisoHorario');
+  if(avisoHorario){
+    avisoHorario.style.display = (!freteGratis && zone && taxaEspecialAtiva()) ? 'block' : 'none';
+  }
 
   const descontoRow = document.getElementById('modalDescontoRow');
   if(descontoRow){
@@ -2209,7 +2430,8 @@ function sendOrder(){
   const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
   const desconto = calcularDesconto(subtotal);
   const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
-  const fee = freteGratis ? 0 : zone.fee;
+  const horarioEspecialAplicado = !freteGratis && taxaEspecialAtiva();
+  const fee = freteGratis ? 0 : taxaComHorario(zone.fee);
   const total = Math.max(0, subtotal - desconto + fee);
 
   let msg = 'Pedido Flash Express:%0A%0A';
@@ -2223,6 +2445,7 @@ function sendOrder(){
   }
   if(desconto > 0) msg += `%0ADesconto: - ${money(desconto)}`;
   msg += `%0ATaxa de entrega (${zone.name}): ${freteGratis ? 'Grátis' : money(fee)}`;
+  if(horarioEspecialAplicado) msg += ` (horário especial)`;
   msg += `%0A*Total: ${money(total)}*`;
   if(cupomAplicado && cupomAplicado.type === 'brinde'){
     msg += `%0A🎁 Brinde do cupom: ${cupomAplicado.brindeDesc}`;
