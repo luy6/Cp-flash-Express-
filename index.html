@@ -1098,6 +1098,15 @@ function taxaHorarioAtiva(){
 function taxaEspecialAtiva(){
   return !!taxaHorarioAtiva();
 }
+/* Retorna o valor da faixa de horário "ativa" para um bairro específico: se o admin
+   cadastrou um valor personalizado para esse bairro nessa faixa, usa ele; senão usa
+   o valor padrão da faixa (o mesmo valor que valia antes, para todos os bairros). */
+function valorTaxaHorarioParaZona(turno, zone){
+  if(!turno) return 0;
+  const overrides = turno.valoresPorBairro || {};
+  const v = zone ? overrides[zone.id] : undefined;
+  return (typeof v === 'number' && !isNaN(v)) ? Math.max(0, v) : Math.max(0, turno.valor);
+}
 /* Bairro com taxa 0 significa "valor calculado por distância": não soma ao total
    e nunca é afetado pela taxa por horário. Bairros com ignorarHorario:true mantêm
    sempre o próprio valor cadastrado, mesmo com uma faixa de horário ativa. */
@@ -1108,7 +1117,7 @@ function calcularTaxaEntrega(zone){
   if(!zone) return 0;
   if(bairroCalculadoPorDistancia(zone)) return 0;
   const ativa = taxaHorarioAtiva();
-  if(ativa && !zone.ignorarHorario) return Math.max(0, ativa.valor);
+  if(ativa && !zone.ignorarHorario) return valorTaxaHorarioParaZona(ativa, zone);
   return zone.fee;
 }
 // mantido por compatibilidade com chamadas antigas que não têm o bairro (aplica a todos)
@@ -1145,7 +1154,7 @@ function populateZones(){
     } else {
       const ativa = !z.ignorarHorario ? taxaHorarioAtiva() : null;
       opt.textContent = ativa
-        ? `${z.name} — ${money(ativa.valor)} (${ativa.nome})`
+        ? `${z.name} — ${money(valorTaxaHorarioParaZona(ativa, z))} (${ativa.nome})`
         : `${z.name} — ${money(z.fee)}`;
     }
     sel.appendChild(opt);
@@ -1915,10 +1924,12 @@ function renderizarListaHorariosTaxa(){
       const emVigor = !!(ativaAgora && ativaAgora.id === t.id);
       const statusTxt = t.ativo ? (emVigor ? 'Em vigor agora' : 'Ativa') : 'Desativada';
       const statusCor = t.ativo ? (emVigor ? 'var(--red)' : 'var(--violet-glow)') : 'var(--muted)';
+      const qtdPersonalizados = Object.keys(t.valoresPorBairro || {}).length;
+      const txtPersonalizados = qtdPersonalizados > 0 ? ` • ${qtdPersonalizados} bairro${qtdPersonalizados>1?'s':''} c/ valor próprio` : '';
       row.innerHTML = `
         <div class="cupom-info">
           <span class="cupom-codigo">${t.nome}</span>
-          <span class="cupom-detalhe">${t.inicio} às ${t.fim} — ${money(t.valor)}</span>
+          <span class="cupom-detalhe">${t.inicio} às ${t.fim} — ${money(t.valor)} (padrão)${txtPersonalizados}</span>
           <span class="cupom-uso" style="color:${statusCor};">${statusTxt}</span>
         </div>
         <div class="zona-botoes">
@@ -1961,13 +1972,34 @@ function renderizarListaHorariosTaxa(){
         </div>
       </div>
       <div class="field-group">
-        <label>Taxa de entrega nesse horário (R$)</label>
+        <label>Taxa de entrega nesse horário (R$) — valor padrão</label>
         <input class="field-input" id="thValor" type="number" min="0" step="0.01" placeholder="Ex: 5.00" value="${editando ? editando.valor : ''}">
       </div>
       <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; cursor:pointer;">
         <input type="checkbox" id="thAtivo" style="width:16px; height:16px;" ${(!editando || editando.ativo) ? 'checked' : ''}>
         Faixa ativa
       </label>
+      ${(() => {
+        const bairrosElegiveis = DELIVERY_ZONES.filter(z => !z.ignorarHorario && !bairroCalculadoPorDistancia(z));
+        if(bairrosElegiveis.length === 0){
+          return '';
+        }
+        const overrides = (editando && editando.valoresPorBairro) || {};
+        const linhas = bairrosElegiveis.map(z => `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="flex:1; font-size:13px; color:var(--muted);">${z.name}</span>
+            <input class="field-input th-valor-bairro" data-zone="${z.id}" type="number" min="0" step="0.01" style="width:110px;" placeholder="Padrão" value="${typeof overrides[z.id] === 'number' ? overrides[z.id] : ''}">
+          </div>
+        `).join('');
+        return `
+          <div class="field-group">
+            <label>Valores personalizados por bairro (opcional — deixe em branco para usar o valor padrão acima)</label>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+              ${linhas}
+            </div>
+          </div>
+        `;
+      })()}
       <div class="linha-botoes">
         <button type="button" class="btn-cancelar-item">Cancelar</button>
         <button type="button" class="btn-salvar-item">Salvar faixa</button>
@@ -1988,14 +2020,26 @@ function renderizarListaHorariosTaxa(){
       if(inicio === fim){ alert('O início e o fim não podem ser o mesmo horário.'); return; }
       if(isNaN(valor) || valor < 0){ alert('Informe um valor de taxa válido.'); return; }
 
+      const valoresPorBairro = {};
+      let valorBairroInvalido = false;
+      form.querySelectorAll('.th-valor-bairro').forEach(inp => {
+        const bruto = inp.value.trim();
+        if(bruto === '') return;
+        const num = parseFloat(bruto.replace(',', '.'));
+        if(isNaN(num) || num < 0){ valorBairroInvalido = true; return; }
+        valoresPorBairro[inp.dataset.zone] = num;
+      });
+      if(valorBairroInvalido){ alert('Há um valor de bairro inválido. Deixe em branco para usar o padrão, ou informe um número válido.'); return; }
+
       if(editando){
         editando.nome = nome;
         editando.inicio = inicio;
         editando.fim = fim;
         editando.valor = valor;
         editando.ativo = ativo;
+        editando.valoresPorBairro = valoresPorBairro;
       } else {
-        TAXAS_HORARIO.push({ id: idUnicoHorarioTaxa(), nome, inicio, fim, valor, ativo });
+        TAXAS_HORARIO.push({ id: idUnicoHorarioTaxa(), nome, inicio, fim, valor, ativo, valoresPorBairro });
       }
       salvarDados();
       populateZones();
@@ -2618,7 +2662,7 @@ function updateModalSummary(){
   if(avisoHorario){
     const ativaHorario = (zone && !zone.ignorarHorario && !calculadoPorDistancia) ? taxaHorarioAtiva() : null;
     if(!freteGratis && zone && ativaHorario){
-      avisoHorario.textContent = `⏰ ${ativaHorario.nome}: taxa de entrega de ${money(ativaHorario.valor)} aplicada`;
+      avisoHorario.textContent = `⏰ ${ativaHorario.nome}: taxa de entrega de ${money(valorTaxaHorarioParaZona(ativaHorario, zone))} aplicada`;
       avisoHorario.style.display = 'block';
     } else {
       avisoHorario.style.display = 'none';
