@@ -475,6 +475,18 @@
   .field-error{ color:var(--red); font-size:11px; display:none; margin-top:-4px; }
   .field-error.show{ display:block; }
 
+  /* ---------- pix payment modal ---------- */
+  .pix-total{ text-align:center; font-size:14px; color:var(--muted); }
+  .pix-total b{ font-family:'Anton'; font-size:24px; color:var(--white); display:block; margin-top:2px; }
+  #pixQrCanvas{ margin:14px auto; display:block; border-radius:12px; background:#fff; padding:10px; }
+  .pix-info{ background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.7; }
+  .pix-info p{ margin:0; }
+  .pix-info b{ color:var(--white); }
+  .pix-aviso{ margin-top:4px; font-size:13px; color:var(--violet-glow); text-align:center; font-weight:700; }
+  #pixCopiaCola{ font-family:'Space Mono', monospace; font-size:11px; }
+  .btn-copiar-pix{ margin-top:2px; }
+  .btn-copiar-pix.copiado{ background:var(--red); color:#fff; border-color:var(--red); }
+
   @media (max-width:720px){
     nav{ display:none; }
     .stats{ gap:24px; }
@@ -961,12 +973,62 @@
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-primary checkout-btn" onclick="sendOrder()">Confirmar e enviar pelo WhatsApp</button>
+      <button class="btn btn-primary checkout-btn" onclick="irParaPagamento()">Ir para pagamento</button>
       <button class="btn btn-ghost checkout-btn" onclick="closeAddressModal()">Voltar ao carrinho</button>
     </div>
   </div>
 </div>
 
+<!-- PAYMENT METHOD MODAL -->
+<div class="modal-overlay" id="paymentMethodOverlay" onclick="if(event.target===this) closePaymentMethodModal()">
+  <div class="address-modal">
+    <div class="modal-head">
+      <div>
+        <h3>Forma de pagamento</h3>
+        <span>Como você prefere pagar?</span>
+      </div>
+      <button class="close-btn" onclick="closePaymentMethodModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <button class="btn btn-primary checkout-btn" onclick="escolherPagamentoPix()">⚡ Pagar com Pix (QR code)</button>
+      <button class="btn btn-ghost checkout-btn" onclick="escolherPagamentoEntrega()">💵 Pagar na entrega (dinheiro/cartão)</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIX PAYMENT MODAL -->
+<div class="modal-overlay" id="pixOverlay" onclick="if(event.target===this) closePixModal()">
+  <div class="address-modal">
+    <div class="modal-head">
+      <div>
+        <h3>Pagamento via Pix</h3>
+        <span>Escaneie o QR ou copie o código ⚡</span>
+      </div>
+      <button class="close-btn" onclick="closePixModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pix-total">Valor do pedido<b id="pixValor">R$ 0,00</b></div>
+      <canvas id="pixQrCanvas"></canvas>
+      <div class="field-group">
+        <label for="pixCopiaCola">Pix Copia e Cola</label>
+        <textarea class="field-input" id="pixCopiaCola" readonly rows="3" style="resize:none;"></textarea>
+        <button type="button" class="btn btn-ghost btn-copiar-pix" id="btnCopiarPix" onclick="copiarPix()">Copiar código Pix</button>
+      </div>
+      <div class="pix-info">
+        <p>Chave Pix (telefone): <b>86 99940-4150</b></p>
+        <p>Nome: <b>Luiz Fernando Araujo Carvalho</b></p>
+        <p>Banco: <b>Nubank</b></p>
+      </div>
+      <p class="pix-aviso">📸 Envie o comprovante do Pix para essa conversa, por favor.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary checkout-btn" onclick="confirmarPagamentoEEnviar()">Já paguei, enviar pedido</button>
+      <button class="btn btn-ghost checkout-btn" onclick="closePixModal()">Voltar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -2684,29 +2746,138 @@ function updateModalSummary(){
   document.getElementById('modalTotal').textContent = money(Math.max(0, subtotal - desconto + fee));
 }
 
-function sendOrder(){
+/* ---------- Pix payment ---------- */
+const PIX_CHAVE = '86999404150';
+const PIX_NOME = 'LUIZ FERNANDO CARVALHO';
+const PIX_CIDADE = 'ESPERANTINA';
+
+function crc16Pix(str){
+  let crc = 0xFFFF;
+  for(let i=0; i<str.length; i++){
+    crc ^= str.charCodeAt(i) << 8;
+    for(let j=0; j<8; j++){
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function pixField(id, value){
+  const len = String(value.length).padStart(2, '0');
+  return `${id}${len}${value}`;
+}
+
+function gerarPixPayload(valor){
+  const chaveFormatada = '+55' + PIX_CHAVE;
+  const mai = pixField('26', pixField('00','br.gov.bcb.pix') + pixField('01', chaveFormatada));
+  const valorStr = valor.toFixed(2);
+  const txid = pixField('62', pixField('05', 'FLASHEXP'));
+  const semCRC =
+    pixField('00','01') +
+    mai +
+    pixField('52','0000') +
+    pixField('53','986') +
+    pixField('54', valorStr) +
+    pixField('58','BR') +
+    pixField('59', PIX_NOME.substring(0,25)) +
+    pixField('60', PIX_CIDADE.substring(0,15)) +
+    txid +
+    '6304';
+  return semCRC + crc16Pix(semCRC);
+}
+
+let pixPedidoAtual = null; // guarda os dados calculados entre os dois modais
+
+function calcularResumoPedido(){
   const items = Object.values(cart);
   const zone = getZone();
+  const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
+  const desconto = calcularDesconto(subtotal);
+  const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
+  const calculadoPorDistancia = bairroCalculadoPorDistancia(zone);
+  const ativaHorario = (!freteGratis && zone && !zone.ignorarHorario && !calculadoPorDistancia) ? taxaHorarioAtiva() : null;
+  const fee = freteGratis ? 0 : (zone ? calcularTaxaEntrega(zone) : 0);
+  const total = Math.max(0, subtotal - desconto + fee);
+  return { items, zone, subtotal, desconto, freteGratis, calculadoPorDistancia, ativaHorario, fee, total };
+}
+
+function irParaPagamento(){
   const street = document.getElementById('addrStreet').value.trim();
   const number = document.getElementById('addrNumber').value.trim();
   const complement = document.getElementById('addrComplement').value.trim();
   const reference = document.getElementById('addrReference').value.trim();
   const phone = document.getElementById('addrPhone').value.trim();
   const errorEl = document.getElementById('addrError');
+  const resumo = calcularResumoPedido();
 
-  if(items.length === 0 || !zone || !street || !number || !phone){
+  if(resumo.items.length === 0 || !resumo.zone || !street || !number || !phone){
     errorEl.classList.add('show');
     return;
   }
   errorEl.classList.remove('show');
 
-  const subtotal = items.reduce((s,i)=>s+i.qty*i.product.price,0);
-  const desconto = calcularDesconto(subtotal);
-  const freteGratis = !!(cupomAplicado && cupomAplicado.type === 'entrega');
-  const calculadoPorDistancia = bairroCalculadoPorDistancia(zone);
-  const ativaHorario = (!freteGratis && !zone.ignorarHorario && !calculadoPorDistancia) ? taxaHorarioAtiva() : null;
-  const fee = freteGratis ? 0 : calcularTaxaEntrega(zone);
-  const total = Math.max(0, subtotal - desconto + fee);
+  pixPedidoAtual = { ...resumo, street, number, complement, reference, phone };
+  document.getElementById('paymentMethodOverlay').classList.add('open');
+}
+
+function closePaymentMethodModal(){
+  document.getElementById('paymentMethodOverlay').classList.remove('open');
+}
+
+function escolherPagamentoPix(){
+  if(!pixPedidoAtual) return;
+  closePaymentMethodModal();
+
+  const total = pixPedidoAtual.total > 0 ? pixPedidoAtual.total : 0.01;
+  document.getElementById('pixValor').textContent = money(pixPedidoAtual.total);
+  const payload = gerarPixPayload(total);
+  document.getElementById('pixCopiaCola').value = payload;
+
+  const canvas = document.getElementById('pixQrCanvas');
+  if(window.QRCode){
+    QRCode.toCanvas(canvas, payload, { width: 220, margin: 1 }, function(err){ if(err) console.error(err); });
+  }
+
+  document.getElementById('btnCopiarPix').textContent = 'Copiar código Pix';
+  document.getElementById('btnCopiarPix').classList.remove('copiado');
+
+  document.getElementById('pixOverlay').classList.add('open');
+}
+
+function escolherPagamentoEntrega(){
+  if(!pixPedidoAtual) return;
+  closePaymentMethodModal();
+  enviarPedidoWhatsapp('%0A%0A💵 Pagamento: na entrega (dinheiro ou cartão).');
+  closeAddressModal();
+}
+
+function closePixModal(){
+  document.getElementById('pixOverlay').classList.remove('open');
+}
+
+function copiarPix(){
+  const campo = document.getElementById('pixCopiaCola');
+  campo.select();
+  campo.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(campo.value).then(() => {
+    const btn = document.getElementById('btnCopiarPix');
+    btn.textContent = 'Código copiado ✓';
+    btn.classList.add('copiado');
+  }).catch(() => {
+    document.execCommand('copy');
+  });
+}
+
+function confirmarPagamentoEEnviar(){
+  enviarPedidoWhatsapp('%0A%0A💳 Pagamento: Pix (já realizado).%0A📸 Envie o comprovante do Pix para essa conversa, por favor.');
+  closePixModal();
+  closeAddressModal();
+}
+
+function enviarPedidoWhatsapp(linhaPagamento){
+  if(!pixPedidoAtual) return;
+  const { items, zone, subtotal, desconto, freteGratis, calculadoPorDistancia, ativaHorario, fee, total, street, number, complement, reference, phone } = pixPedidoAtual;
 
   let msg = 'Pedido Flash Express:%0A%0A';
   items.forEach(i => {
@@ -2729,6 +2900,7 @@ function sendOrder(){
   msg += `%0ABairro: ${zone.name}`;
   if(reference) msg += `%0AReferência: ${reference}`;
   msg += `%0ATelefone: ${phone}`;
+  msg += linhaPagamento;
   msg += `%0A%0AConfirmo que sou maior de 18 anos.`;
 
   window.open('https://wa.me/5586999404150?text=' + msg, '_blank');
@@ -2738,8 +2910,9 @@ function sendOrder(){
     salvarDados();
     removerCupom();
   }
-  closeAddressModal();
+  pixPedidoAtual = null;
 }
+
 
 /* init */
 carregarDados();
